@@ -1,0 +1,29 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Local development: the API on 3004 and the console on 5175 (Vite, which
+# proxies /api, /ingest, /mcp to the API), until Ctrl-C or either one stops.
+# Arguments go to `rails server` (PORT moves the API; the console then needs
+# API_TARGET to follow it).
+Dir.chdir(File.expand_path("..", __dir__))
+
+port = ENV.fetch("PORT", "3004")
+children = [
+  spawn("bin/rails", "server", "-p", port, *ARGV),
+  spawn({ "API_TARGET" => ENV.fetch("API_TARGET", "http://localhost:#{port}") }, "npm", "--prefix", "frontend", "run", "dev")
+]
+
+stop = lambda do |*|
+  children.each do |pid|
+    Process.kill("TERM", pid)
+  rescue Errno::ESRCH
+    nil
+  end
+end
+trap("INT", &stop)
+trap("TERM", &stop)
+
+_, status = Process.wait2
+stop.call
+Process.waitall
+exit(status.success? ? 0 : 1)

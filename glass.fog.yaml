@@ -1,0 +1,89 @@
+# Fog app manifest — import with: POST /api/apps/import
+# Secrets are names only; values are generated/entered in the fog UI.
+#
+# Glass is a guest on the box every other app lives on: it
+# shares fog's Postgres, keeps its telemetry in a database of its own that
+# backups leave out, and is reached by every sibling at http://glass on the
+# fog network — which is all an app needs to know to report.
+name: glass
+spec:
+  source:
+    type: git
+    repo: https://github.com/fogapp/glass.git
+    branch: main
+    dockerfile: Dockerfile
+    buildArgs:
+      GIT_REV: "{{commit}}"
+  env:
+    RAILS_ENV: production
+    GIT_SHA: "{{commit}}"
+    GLASS_HOST: "{{fqdn}}"
+    # The household's zone, for date bucketing. Set it to your own.
+    TIME_ZONE: UTC
+    RAILS_MAX_THREADS: "8"
+    JOB_CONCURRENCY: "1"
+    # Glass observes itself. The key arrives by connecting
+    # Glass on its own Integrations tab in fog once it is up; until then the
+    # agent is inert.
+    GLASS_URL: http://glass
+  secrets:
+    - SECRET_KEY_BASE
+    - AR_ENCRYPTION_PRIMARY_KEY
+    - AR_ENCRYPTION_DETERMINISTIC_KEY
+    - AR_ENCRYPTION_KEY_DERIVATION_SALT
+    # GLASS_API_KEY is not listed: fog refuses to deploy a declared secret
+    # with no value, and connecting Glass to itself adds it to the vault.
+  needs:
+    postgres:
+      databases:
+        # Configuration: small, precious, in the backup artifact.
+        - glass_production
+        # Every signal, partitioned by day: large, disposable, excluded from
+        # backups.
+        - glass_production_telemetry
+        - glass_production_cache
+        - glass_production_queue
+      extensions:
+        - pg_trgm
+        - citext
+        - pgcrypto
+      inject:
+        DATABASE_HOST: host
+        DATABASE_PORT: port
+        DATABASE_USER: user
+        DATABASE_PASSWORD: password
+        DATABASE_NAME: dbname
+  # Migrations run here and nowhere else: fog overlaps two web replicas during
+  # a swap. fog:release = restore a staged fog-backup/2 artifact if one is
+  # armed, then db:prepare (which also creates the day partitions ahead).
+  release:
+    - ./bin/rails
+    - fog:release
+  processes:
+    - name: worker
+      command: ["./bin/jobs"]
+  volumes:
+    # Small managed state (backup staging) — in fog's backups.
+    - name: storage
+      mount: /rails/storage
+      owner: "1000:1000"
+  routes:
+    - port: 80
+  # A sealed app may be wired here to report. Glass keeps its route out
+  # and its MCP is read by cloud models, so a sealed app sends it operational
+  # facts only; fog's docs/sealed-network.md, What sealed does not promise.
+  sealedPeer: true
+  health:
+    path: /up
+  deployStrategy: swap
+  updatePolicy: auto
+  backup:
+    enabled: true
+    beforeUpdate: true
+    # fog-backup/2: Glass produces one verified artifact via /fog/backup of
+    # its configuration database only; fog injects FOG_API_TOKEN to
+    # authenticate. Telemetry is history and is not in it.
+    mode: delegated
+    timeout: 20m
+  # Per container.
+  memoryLimit: 1536m

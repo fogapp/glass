@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Asserts that every path the Docker build needs is actually committed.
+#
+# Why this exists: a global gitignore carrying `*package.json` kept
+# frontend/package.json out of the repo. Every local build worked — the file
+# was on disk — while a clean clone could not build at all, and the failure
+# only surfaced at deploy time as a COPY 404. That class of bug is invisible
+# to every other check we run, because everything else runs against a working
+# tree rather than a checkout.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+
+# Paths the Dockerfile COPYs explicitly, plus anything else a fresh checkout
+# must have to build and boot.
+REQUIRED=(
+  Dockerfile
+  Gemfile
+  Gemfile.lock
+  config.ru
+  frontend/package.json
+  frontend/package-lock.json
+  frontend/index.html
+  frontend/vite.config.ts
+  frontend/tsconfig.json
+  frontend/tsconfig.app.json
+  bin/rails
+  bin/jobs
+  bin/thrust
+  db/schema.rb
+  clients/ruby/glass.gemspec
+  vendor/gems/flare/flare.gemspec
+  vendor/gems/fog-client/fog-client.gemspec
+)
+
+missing=()
+for path in "${REQUIRED[@]}"; do
+  git ls-files --error-unmatch "$path" >/dev/null 2>&1 || missing+=("$path")
+done
+
+if [ ${#missing[@]} -gt 0 ]; then
+  echo "Untracked files the build needs — a clean clone would fail:"
+  for path in "${missing[@]}"; do
+    reason=$(git check-ignore -v "$path" 2>/dev/null)
+    if [ -n "$reason" ]; then
+      echo "  $path  (ignored by: $reason)"
+    else
+      echo "  $path  (never added)"
+    fi
+  done
+  echo
+  echo "Fix with: git add -f <path>, and add a negation to .gitignore so it stays fixed."
+  exit 1
+fi
+
+echo "check-tracked: all build inputs are committed."

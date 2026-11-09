@@ -1,0 +1,79 @@
+# Development only. Production is fog-managed (see glass.fog.yaml).
+#
+# Postgres listens on 5438 so it does not collide with a local one on 5432.
+services:
+  db:
+    # Matches what Fog runs (internal/pg/pg.go): Postgres 18 is the fleet
+    # standard. The -trixie tag keeps the
+    # Debian base identical to postgres:18.
+    image: pgvector/pgvector:pg18-trixie
+    container_name: glass-db-1
+    # Development only: telemetry is write-heavy, and an uncapped WAL (1 GB
+    # by default) is most of what a small Docker disk has left. Durability
+    # is not what a dev database is for.
+    command: postgres -c max_wal_size=128MB -c min_wal_size=32MB -c synchronous_commit=off
+    environment:
+      POSTGRES_USER: glass
+      POSTGRES_PASSWORD: glass
+    ports:
+      - "5438:5432"
+    # The postgres:18 image keeps its data at /var/lib/postgresql/<major>/docker
+    # and declares /var/lib/postgresql as the volume, so the mount is the
+    # parent directory, not .../data.
+    volumes:
+      - glass-pgdata-18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glass"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ./bin/rails server -b 0.0.0.0 -p 3000
+    environment:
+      RAILS_ENV: development
+      DATABASE_HOST: db
+      DATABASE_PORT: "5432"
+      DATABASE_USER: glass
+      DATABASE_PASSWORD: glass
+    ports:
+      - "3004:3000"
+    volumes:
+      - .:/rails
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: ./bin/jobs
+    environment:
+      RAILS_ENV: development
+      DATABASE_HOST: db
+      DATABASE_PORT: "5432"
+      DATABASE_USER: glass
+      DATABASE_PASSWORD: glass
+    volumes:
+      - .:/rails
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    image: node:24-slim
+    working_dir: /frontend
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      API_TARGET: http://web:3000
+    ports:
+      - "5175:5175"
+    volumes:
+      - ./frontend:/frontend
+
+volumes:
+  glass-pgdata-18:

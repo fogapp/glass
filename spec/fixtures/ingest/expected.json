@@ -1,0 +1,14 @@
+{
+  "rails.ndjson": {
+    "accepted": 8, "skipped": 0,
+    "rows": { "transactions": 2, "spans": 1, "metrics": 1, "markers": 1, "logs": 1, "profiles": 1, "pages": 1, "model_calls": 0 }
+  },
+  "harness.ndjson": {
+    "accepted": 17, "skipped": 0,
+    "rows": { "transactions": 2, "spans": 9, "metrics": 1, "markers": 1, "logs": 0, "profiles": 0, "pages": 1, "model_calls": 3 }
+  },
+  "tolerance.ndjson": {
+    "accepted": 4, "skipped": 5,
+    "rows": { "transactions": 2, "spans": 1, "metrics": 0, "markers": 0, "logs": 0, "profiles": 0, "pages": 0, "model_calls": 1 }
+  }
+}

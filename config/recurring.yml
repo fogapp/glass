@@ -1,0 +1,63 @@
+# Infrastructure schedules live HERE, never in user-editable automations.
+# Nothing a person can edit in the console may be what drives rollups,
+# retention, or alerting.
+#
+# Every entry carries a description written for a human reading this at 2am.
+# A job's description is its DESCRIPTION constant — the same text the
+# console's Background jobs page shows (ManagedJobs) — so the two can't
+# drift. Solid Queue reads this file through ERB after the app has booted.
+
+production: &production
+  maintain_partitions:
+    class: MaintainPartitionsJob
+    queue: rollup
+    # Tomorrow's partitions must exist before midnight UTC and yesterday's
+    # expired ones are dropped — this is the whole of telemetry retention.
+    # Hourly rather than daily so a box that was off at the
+    # scheduled minute is never a day without partitions.
+    schedule: every hour at minute 7
+    description: <%= MaintainPartitionsJob::DESCRIPTION.to_json %>
+
+  rollup_metrics:
+    class: RollupMetricsJob
+    queue: rollup
+    # Folds finished 10-second points into the 5-minute and hourly tiers.
+    # Checkpointed: a run only ever rolls windows that have fully closed,
+    # and only advances its cursor when the fold committed.
+    schedule: every 5 minutes
+    description: <%= RollupMetricsJob::DESCRIPTION.to_json %>
+
+  evaluate_monitors:
+    class: EvaluateMonitorsJob
+    queue: monitor
+    schedule: every minute
+    description: <%= EvaluateMonitorsJob::DESCRIPTION.to_json %>
+
+  fog_sync:
+    class: FogSyncJob
+    queue: fog
+    # A no-op until fog is connected in Settings › Fog.
+    schedule: every minute
+    description: <%= FogSyncJob::DESCRIPTION.to_json %>
+
+  prune_operational_data:
+    class: PruneOperationalDataJob
+    queue: default
+    schedule: every day at 5:10am
+    description: <%= PruneOperationalDataJob::DESCRIPTION.to_json %>
+
+  clear_solid_queue_finished_jobs:
+    command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
+    schedule: every hour at minute 12
+    description: "Keep the queue tables from growing without bound."
+
+  reclaim_orphaned_semaphores:
+    class: ReclaimOrphanedSemaphoresJob
+    queue: default
+    # Bounds the lockout after a worker dies mid-job: long-duration
+    # semaphores otherwise stay held until they expire on their own.
+    schedule: every 10 minutes
+    description: <%= ReclaimOrphanedSemaphoresJob::DESCRIPTION.to_json %>
+
+development:
+  <<: *production

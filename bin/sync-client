@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Sync a canonical Glass client into an app's vendored copy, the way fog
+# syncs flare (fog's scripts/sync-flare). Vendoring instead of a registry:
+# a build needs zero credentials and zero network to install it.
+#
+#   a Rails app (it has a Gemfile)        clients/ruby → vendor/gems/glass
+#   a Node app (it has a package.json)    clients/node → packages/glass
+#
+# Usage: bin/sync-client [app-dir ...]   (defaults to sibling checkouts that
+#        already vendor a client; a first-time vendoring names the app)
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+targets=("$@")
+if [ ${#targets[@]} -eq 0 ]; then
+  base="$(cd "$root/.." && pwd)"
+  for dir in "$base"/*/; do
+    if [ -d "${dir}vendor/gems/glass" ] || [ -f "${dir}packages/glass/package.json" ]; then
+      targets+=("${dir%/}")
+    fi
+  done
+  if [ ${#targets[@]} -eq 0 ]; then
+    echo "error: no checkout under $base vendors a glass client (vendor/gems/glass or packages/glass)" >&2
+    echo "hint: pass the app dir explicitly to vendor it the first time: bin/sync-client ../myapp" >&2
+    exit 1
+  fi
+fi
+
+for app in "${targets[@]}"; do
+  if [ -f "$app/Gemfile" ]; then
+    dest="$app/vendor/gems/glass"
+    mkdir -p "$dest"
+    # Tests and the bench stay in the canonical copy; the vendored gem is
+    # lib + gemspec + README + LICENSE.
+    rsync -a --delete \
+      --include='lib/***' --include='glass.gemspec' --include='README.md' --include='LICENSE' \
+      --exclude='*' \
+      "$root/clients/ruby/" "$dest/"
+    echo "synced -> $dest"
+    grep -q 'gem "glass"' "$app/Gemfile" || echo "  add to $app/Gemfile after rails:  gem \"glass\", path: \"vendor/gems/glass\"" >&2
+  elif [ -f "$app/package.json" ]; then
+    dest="$app/packages/glass"
+    mkdir -p "$dest"
+    # Tests stay in the canonical copy (they read Glass's conformance kit);
+    # the vendored package is src + package.json + README + LICENSE.
+    rsync -a --delete \
+      --include='src/***' --include='package.json' --include='README.md' --include='LICENSE' \
+      --exclude='*' \
+      "$root/clients/node/" "$dest/"
+    echo "synced -> $dest"
+  else
+    echo "error: $app is not an app checkout (no Gemfile, no package.json)" >&2
+    exit 1
+  fi
+done

@@ -1,0 +1,78 @@
+# Dev/test run against the glass-db-1 container (pgvector/pgvector:pg18-trixie
+# on 5438; see docker-compose.yml).
+#
+# Production reads the DATABASE_* env vars injected by fog's managed Postgres
+# (needs.postgres.inject in the fog manifest). Four databases:
+#
+#   primary    configuration — small, precious, in fog's backups.
+#   telemetry  every signal — large, append-only, partitioned by day,
+#              excluded from backups. Its tables are
+#              PARTITION BY RANGE, which schema.rb cannot express, so it has
+#              no schema file: `schema_dump: false`, and db:prepare runs its
+#              migrations (db/telemetry_migrate) instead of loading a dump.
+#   cache      Solid Cache.
+#   queue      Solid Queue.
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  # +6, not +3: the agent thread, the rate limiter and a
+  # console query running beside ingest all want a connection of their own.
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 8 }.to_i + 6 %>
+
+development:
+  primary: &primary_development
+    <<: *default
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", 5438) %>
+    username: <%= ENV.fetch("DATABASE_USER", "glass") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "glass") %>
+    database: glass_development
+  telemetry:
+    <<: *primary_development
+    database: glass_development_telemetry
+    migrations_paths: db/telemetry_migrate
+    schema_dump: false
+  cache:
+    <<: *primary_development
+    database: glass_development_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *primary_development
+    database: glass_development_queue
+    migrations_paths: db/queue_migrate
+
+test:
+  primary: &primary_test
+    <<: *default
+    host: <%= ENV.fetch("DATABASE_HOST", "localhost") %>
+    port: <%= ENV.fetch("DATABASE_PORT", 5438) %>
+    username: <%= ENV.fetch("DATABASE_USER", "glass") %>
+    password: <%= ENV.fetch("DATABASE_PASSWORD", "glass") %>
+    database: glass_test
+  telemetry:
+    <<: *primary_test
+    database: glass_test_telemetry
+    migrations_paths: db/telemetry_migrate
+    schema_dump: false
+
+production:
+  primary: &primary_production
+    <<: *default
+    host: <%= ENV["DATABASE_HOST"] %>
+    port: <%= ENV.fetch("DATABASE_PORT", 5432) %>
+    username: <%= ENV["DATABASE_USER"] %>
+    password: <%= ENV["DATABASE_PASSWORD"] %>
+    database: <%= ENV.fetch("DATABASE_NAME", "glass_production") %>
+  telemetry:
+    <<: *primary_production
+    database: glass_production_telemetry
+    migrations_paths: db/telemetry_migrate
+    schema_dump: false
+  cache:
+    <<: *primary_production
+    database: glass_production_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *primary_production
+    database: glass_production_queue
+    migrations_paths: db/queue_migrate

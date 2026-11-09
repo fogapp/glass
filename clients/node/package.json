@@ -1,0 +1,10 @@
+{
+  "name": "glass-client",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "The Glass agent for Node: glass-ingest/1 from a long-lived process, with the pieces an agent harness needs.",
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "exports": { ".": "./src/index.ts" }
+}

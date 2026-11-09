@@ -1,0 +1,61 @@
+# See https://help.github.com/articles/ignoring-files for more about ignoring
+# files.
+#
+# These are the standard Rails ignores, spelled out because
+# `rails new --skip-git` generates no .gitignore at all.
+
+# Ignore bundler config.
+/.bundle
+
+# Ignore all environment files.
+/.env*
+!/.env.example
+
+# Ignore all logfiles and tempfiles.
+/log/*
+/tmp/*
+!/log/.keep
+!/tmp/.keep
+
+# Ignore pidfiles, but keep the directory.
+/tmp/pids/*
+!/tmp/pids/.keep
+
+# Ignore storage (uploaded files in development and any SQLite databases).
+/storage/*
+!/storage/.keep
+
+# Ignore the master key for decrypting credentials.
+/config/master.key
+
+# Node
+/node_modules
+/frontend/node_modules
+/frontend/dist
+
+# Coverage and editor cruft
+/coverage
+/.ruby-lsp
+
+# Reference clones of prior art — kept locally for study, not part of this
+# repo.
+/references/
+
+# Built console (Vite writes into public/; built at image build time).
+/public/assets/
+/public/index.html
+/public/favicon.svg
+
+# Re-include files a global gitignore may swallow.
+#
+# A global ignore carrying `*package.json` would silently keep
+# frontend/package.json out of the repo: every local build works while a
+# clean clone cannot build at all (the Docker COPY 404s). Repo-level
+# patterns take precedence over the global excludesFile, so these negations
+# make the repo self-sufficient regardless of anyone's personal config.
+# bin/check-tracked enforces it.
+!package.json
+!**/package.json
+!package-lock.json
+!**/package-lock.json
+!.rspec

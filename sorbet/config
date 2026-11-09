@@ -1,0 +1,11 @@
+--dir
+.
+--ignore=/frontend
+--ignore=/node_modules
+--ignore=/tmp
+--ignore=/vendor
+--ignore=/db
+--ignore=/spec
+--ignore=/references
+--enable-experimental-requires-ancestor
+--ignore=/clients

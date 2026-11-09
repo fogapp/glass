@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ruby:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18-trixie
+        env:
+          POSTGRES_USER: glass
+          POSTGRES_PASSWORD: glass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U glass" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    env:
+      RAILS_ENV: test
+      DATABASE_HOST: localhost
+      DATABASE_PORT: "5432"
+      DATABASE_USER: glass
+      DATABASE_PASSWORD: glass
+    steps:
+      - uses: actions/checkout@v4
+      - run: bin/check-tracked
+      # The tools the production image ships (Dockerfile): specs shell out to
+      # real pg_dump, tar and zstd, and quietly take a different path when one
+      # is missing. postgresql-client comes from PGDG to match the server (18).
+      - name: Install system tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install --no-install-recommends -y postgresql-client-18 zstd
+          zstd --version && pg_dump --version
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+      # db:prepare rather than db:test:prepare: the telemetry database has no
+      # schema file (its tables are partitioned), so it is migrated.
+      - run: bin/rails db:prepare
+      - run: bundle exec rubocop --no-color
+      - run: bundle exec srb tc
+      - run: bundle exec rspec --format progress
+      # The agent gem is its own project with its own suite (clients/ruby);
+      # the app's bundle carries everything it needs.
+      - run: cd clients/ruby && BUNDLE_GEMFILE=../../Gemfile bundle exec rake
+      # Here and not in the frontend job: it regenerates the console's
+      # vocabularies with bin/rails.
+      - run: bin/check-types
+      - run: bundle exec brakeman -q --no-pager --exit-on-warn
+      - run: bundle exec bundler-audit check --update --config config/bundler-audit.yml
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci
+      # The Node client (clients/node): Node runs its TypeScript as it is,
+      # and the console's compiler checks its types.
+      - run: node --test "clients/node/test/*.test.ts"
+      - run: frontend/node_modules/.bin/tsc -p clients/node
+      - run: npm --prefix frontend run lint
+      - run: npm --prefix frontend run build
+      - run: npm --prefix frontend test -- --run
+      - run: bin/design-guard
+
+  go:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: clients/go/go.mod
+          cache-dependency-path: clients/go/go.sum
+      - run: go vet ./...
+      - run: go test ./...

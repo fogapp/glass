@@ -1,0 +1,42 @@
+{
+  "comment": "Attribute and property keys whose values never leave the process, whichever agent saw them. A filtered key keeps its place and its value becomes \"[FILTERED]\". Matching is case-insensitive and anywhere in the key. A session is filtered as an identifier (session, session_id, a Rails _app_session cookie), not as a word: session_kind is kept. Counts are not secrets: a key naming tokens in the plural (input_tokens, totalTokens) is kept.",
+  "filtered": [
+    "password",
+    "user_password",
+    "passwd",
+    "client_secret",
+    "token",
+    "csrf_token",
+    "accessToken",
+    "api_key",
+    "apikey",
+    "API_KEY",
+    "access_key",
+    "authorization",
+    "auth",
+    "OAuth",
+    "credentials",
+    "cookie",
+    "Set-Cookie",
+    "session",
+    "session_id",
+    "sessionId",
+    "_myapp_session"
+  ],
+  "kept": [
+    "model",
+    "bytes",
+    "cold",
+    "user_id",
+    "provider",
+    "api-key-name",
+    "accesskey",
+    "path",
+    "status",
+    "input_tokens",
+    "max_tokens",
+    "totalTokens",
+    "session_kind",
+    "session_count"
+  ]
+}

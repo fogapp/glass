@@ -1,0 +1,82 @@
+# Omakase Ruby styling + Sorbet sigil enforcement + house cops
+# (rubocop/glass_cops.rb — each cop encodes a bug class a sibling app shipped).
+inherit_gem: { rubocop-rails-omakase: rubocop.yml }
+
+plugins:
+  - rubocop-sorbet
+
+require:
+  - ./rubocop/glass_cops
+
+AllCops:
+  Exclude:
+    - "bin/**/*"
+    - "db/schema.rb"
+    - "db/*_schema.rb"
+    - "node_modules/**/*"
+    - "vendor/**/*"
+    # The client gem is its own project with its own tests (clients/ruby);
+    # it runs inside other apps, so it follows plain Ruby style, not Sorbet.
+    - "clients/**/*"
+    - "sorbet/**/*"
+    - "frontend/**/*"
+    - "references/**/*"
+    - "tmp/**/*"
+
+Glass/NoParamsCast:
+  Include:
+    - "app/**/*.rb"
+
+Glass/NoSingularErrorRender:
+  Include:
+    - "app/controllers/**/*.rb"
+
+# lib/**/*.rake too: the rake tasks (fog release, seeds) reach models and upstreams like any other caller.
+Glass/NoCrossEnumDeserialize:
+  Include:
+    - "app/**/*.rb"
+    - "lib/**/*.rb"
+    - "lib/**/*.rake"
+
+Glass/NoRawNetHttp:
+  Include:
+    - "app/**/*.rb"
+    - "lib/**/*.rb"
+    - "lib/**/*.rake"
+  Exclude:
+    # The one sanctioned Net::HTTP call site: the shared client itself.
+    - "app/services/upstream_http_client.rb"
+
+Glass/NoUnreviewedPrivateEgress:
+  Include:
+    - "app/**/*.rb"
+  Exclude:
+    # The default lives here and is `false`; the cop is about overrides.
+    - "app/services/upstream_http_client.rb"
+
+# Every file in app/ is typed: strict; downgrades happen case by case with a
+# comment, never silently. Concerns are outside the cop
+# because they are DSL-driven (requires_ancestor, T.bind) and may need a
+# lower sigil — every one is strict today. lib/ holds only rake tasks, which
+# are typed: false like the specs.
+Sorbet/StrictSigil:
+  Enabled: true
+  Include:
+    - "app/**/*.rb"
+  Exclude:
+    - "app/**/concerns/**/*.rb" # reflection/DSL-driven; typed: strict where possible
+
+Sorbet/EnforceSigilOrder:
+  Enabled: true
+
+# Specs define anonymous client classes in blocks (Class.new do def ... end)
+# — that is the point of them, so this newer cop stays off.
+Sorbet/BlockMethodDefinition:
+  Enabled: false
+Sorbet/ForbidTAnyWithNil:
+  Enabled: true
+# Constants keep their explicit T.let, matching the sibling apps' code.
+Sorbet/RedundantTLetForLiteral:
+  Enabled: false
+Sorbet/Refinement:
+  Enabled: true

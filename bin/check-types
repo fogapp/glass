@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# The console's generated vocabularies (frontend/src/types/generated.ts)
+# must say what the backend enums say now: regenerate and refuse a diff.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+bin/rails glass:types >/dev/null || exit 1
+if ! git diff --quiet -- frontend/src/types/generated.ts; then
+  echo "frontend/src/types/generated.ts is stale — run bin/rails glass:types and commit it" >&2
+  git --no-pager diff -- frontend/src/types/generated.ts >&2
+  exit 1
+fi
+echo "check-types: generated vocabularies are current."

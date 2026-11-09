@@ -1,0 +1,29 @@
+{
+  "ignored_warnings": [
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "4253be27601efa7b2f0310fd61a0a2d2241e177c14114aa4ea46861efe5e935c",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/services/telemetry/rollup.rb",
+      "line": 112,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "connection.select_value(\"SELECT min(ts) FROM #{tier.source}\")",
+      "render_path": null,
+      "location": {
+        "type": "method",
+        "class": "Telemetry::Rollup",
+        "method": "self.earliest"
+      },
+      "user_input": "tier.source",
+      "confidence": "Medium",
+      "cwe_id": [
+        89
+      ],
+      "note": "tier.source is one of Telemetry::Rollup::TIERS, a frozen constant naming a table \u2014 never input."
+    }
+  ],
+  "updated_at": "2026-09-30",
+  "brakeman_version": "8.0.6"
+}

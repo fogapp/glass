@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+# Development image: same tool surface as production, but gems install at
+# build time and the app is bind-mounted for reloading.
+FROM ruby:3.4.2-slim
+
+WORKDIR /rails
+
+# postgresql-client-18 from PGDG for the same reason as the production
+# image: the dev image must dump/restore the same major the fleet runs.
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y curl ca-certificates && \
+    install -d /usr/share/postgresql-common/pgdg && \
+    curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc && \
+    echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main' > /etc/apt/sources.list.d/pgdg.list && \
+    apt-get update -qq && \
+    apt-get install --no-install-recommends -y \
+      build-essential git libpq-dev libyaml-dev pkg-config postgresql-client-18 zstd && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY Gemfile Gemfile.lock ./
+COPY vendor ./vendor
+COPY clients/ruby ./clients/ruby
+RUN bundle install
+
+COPY . .
+
+EXPOSE 3000
+CMD ["./bin/rails", "server", "-b", "0.0.0.0"]

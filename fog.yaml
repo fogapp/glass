@@ -1,0 +1,63 @@
+# The only app-owned metadata fog reads (build.ReadRepoManifest). Replaces
+# spec.notes in the fog UI after the first successful deploy.
+
+# Household sign-in (fog's docs/signin-contract.md): fog registers Glass as a
+# client of its OpenID provider and injects OIDC_ISSUER, OIDC_CLIENT_ID and
+# OIDC_CLIENT_SECRET. People sign in to the console with their fog passkey;
+# fog maps their fog role onto Glass's (operators are admins, members are
+# members), and the app's Sign-in tab in fog decides who may. Outside fog the
+# same three variables point Glass at any OIDC provider. Only the console's
+# people: agents keep reporting with ingest keys, integrations with API
+# tokens.
+signin:
+  contract: fog-signin/1
+  redirect: /auth/oidc/callback
+  logout: /auth/oidc/backchannel
+  roles: [admin, member, guest]
+  default:
+    operator: admin
+    member: member
+
+# fog-integration/1 (fog's docs/integrations-contract.md): what other apps
+# connect to on their Integrations tab in fog. Fog reads this at every
+# deploy, so an offer added here reaches the installed Glass with its next
+# push. One offer, so connecting an app is one click: POST /fog/integrations
+# mints an ingest key and a read-only API token for that app alone, and fog
+# fills {{url}} with Glass's address on the fog network.
+integrations:
+  offers:
+    - id: monitoring
+      title: Monitoring
+      blurb: Requests, errors, logs and profiles from this app show up in Glass, and the app can read Glass's charts, monitors, incidents and deploys without changing them.
+      env:
+        GLASS_URL: "{{url}}"
+      secrets: [GLASS_API_KEY, GLASS_READ_TOKEN]
+      capabilities:
+        - Requests, errors, logs and profiles show up in Glass
+        - Read Glass's charts, monitors, incidents and deploys
+
+gettingStarted: |
+  ## First run
+
+  1. Open the console at your app URL and sign in with fog — the first
+     person to do so is Glass's admin. (Off fog, or before fog has a domain,
+     the setup wizard creates the household and the first admin instead.)
+  2. In fog, open the app you want to watch, then its Integrations tab, and
+     connect Glass. Fog asks Glass for an ingest key and a read-only API
+     token for that app alone, sets `GLASS_URL` and the `GLASS_API_KEY` and
+     `GLASS_READ_TOKEN` secrets, and redeploys it. A Rails app also needs
+     `gem "glass", path: "vendor/gems/glass"` after rails in its Gemfile
+     (vendored by `bin/sync-client` from the glass repo). Requests, SQL,
+     jobs, runtime, logs and profiles arrive from the next boot.
+  3. Optional: Settings › Notifications — enter `http://ntfy` and a topic.
+
+  Off fog, Settings › Apps adds an app and shows its ingest key once: set
+  it as `GLASS_API_KEY` beside `GLASS_URL` by hand.
+
+  ## Notes
+
+  - Telemetry lives in `glass_production_telemetry`, partitioned by day and
+    kept within the disk budget in Settings › Retention. It is deliberately
+    not in the backup artifact; the configuration database is.
+  - Migrations run in the release phase only, never at boot — fog overlaps
+    two web replicas during a blue-green swap.

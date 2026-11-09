@@ -1,0 +1,54 @@
+# frozen_string_literal: true
+
+require "rake/testtask"
+
+Rake::TestTask.new do |t|
+  t.libs << "lib" << "test"
+  t.pattern = "test/**/*_test.rb"
+  t.warning = false
+end
+
+# glass.js is canonical in clients/browser and shipped inside each client
+# that relays for it: the gem (lib/glass/assets/glass.js) and the Node client
+# (clients/node/src/assets/glass.js). `rake` fails when a copy drifts so none
+# can lag the source; `rake browser:sync` refreshes them. The Node client's
+# own suite checks its copy too.
+BROWSER_SOURCE = File.expand_path("../browser/glass.js", __dir__)
+BROWSER_COPIES = [
+  File.expand_path("lib/glass/assets/glass.js", __dir__),
+  File.expand_path("../node/src/assets/glass.js", __dir__)
+].freeze
+BROWSER_TESTS = File.expand_path("../browser/test", __dir__)
+
+namespace :browser do
+  desc "Copy clients/browser/glass.js into the clients that ship it"
+  task :sync do
+    BROWSER_COPIES.each do |copy|
+      next unless File.directory?(File.dirname(File.dirname(copy))) # a vendored gem has no Node client beside it
+
+      mkdir_p File.dirname(copy)
+      cp BROWSER_SOURCE, copy
+    end
+  end
+
+  desc "Fail if a client's copy of glass.js differs from the canonical source"
+  task :check do
+    BROWSER_COPIES.each do |copy|
+      next unless File.exist?(copy)
+
+      abort "#{copy} differs from clients/browser/glass.js — run `rake browser:sync`" unless File.binread(copy) == File.binread(BROWSER_SOURCE)
+    end
+  end
+
+  desc "Run the glass.js node tests (skipped when node is not installed)"
+  task :test do
+    node = ENV["NODE"] || %w[node /opt/homebrew/bin/node /usr/local/bin/node].find { |n| system("#{n} --version >/dev/null 2>&1") }
+    if node
+      sh node, "--test", BROWSER_TESTS
+    else
+      puts "browser:test skipped: node not found"
+    end
+  end
+end
+
+task default: %w[browser:check test browser:test]
